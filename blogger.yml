@@ -2,8 +2,8 @@ name: Publish Blog Feed to Blogger
 
 on:
   schedule:
-    # هر روز ساعت 10 صبح و 10 شب به وقت UTC اجرا می‌شود
-    - cron: '0 10,22 * * *'
+    # هر روز ساعت 6 صبح و 18 عصر به وقت UTC (معادل 9:30 و 21:30 ایران)
+    - cron: '0 6,18 * * *'
   workflow_dispatch:  # امکان اجرای دستی
 
 jobs:
