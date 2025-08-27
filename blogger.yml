@@ -1,16 +1,26 @@
-name: Publish Blog Feed to Blogger
+name: Blog Feed to Blogger
 
 on:
   schedule:
-    # هر روز ساعت 6 صبح و 18 عصر به وقت UTC (معادل 9:30 و 21:30 ایران)
-    - cron: '0 6,18 * * *'
-  workflow_dispatch:  # امکان اجرای دستی
+    # اجرای روزانه دوبار: ساعت 10 و 22 به وقت UTC
+    - cron: '0 10,22 * * *'
+  workflow_dispatch: # امکان اجرای دستی
 
 jobs:
-  run-python-script:
+  run-blog-feed:
     runs-on: ubuntu-latest
+
+    env:
+      BLOG_ID: ${{ secrets.BLOG_ID }}
+      SERVICE_ACCOUNT_FILE: service_account.json
+      GITHUB_TOKEN_CUSTOM: ${{ secrets.MY_GITHUB_TOKEN }}
+      GITHUB_REPO_CUSTOM: ${{ secrets.MY_GITHUB_REPO }}
+      IMG_PREFIX: ${{ secrets.IMG_PREFIX }}
+      FEED_URL: ${{ secrets.FEED_URL }}
+      POSTED_FILE: posted_titles.json
+
     steps:
-      - name: Checkout Repo
+      - name: Checkout repository
         uses: actions/checkout@v3
 
       - name: Set up Python
@@ -20,13 +30,12 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install feedparser beautifulsoup4 requests google-api-python-client google-auth google-auth-oauthlib deep-translator
+          pip install feedparser beautifulsoup4 requests deep-translator google-api-python-client google-auth google-auth-oauthlib
 
-      - name: Run blog_feed_to_blogger.py
-        env:
-          BLOG_ID: ${{ secrets.BLOG_ID }}
-          MY_GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
-          MY_GITHUB_REPO: ${{ secrets.MY_GITHUB_REPO }}
-          IMG_PREFIX: ${{ secrets.IMG_PREFIX }}
-          FEED_URL: ${{ secrets.FEED_URL }}
-        run: python blog_feed_to_blogger.py
+      - name: Prepare Service Account
+        run: |
+          echo "${{ secrets.SERVICE_ACCOUNT_JSON }}" > service_account.json
+
+      - name: Run Blog Feed Script
+        run: |
+          python blog_feed_to_blogger.py
