@@ -25,8 +25,8 @@ jobs:
       - name: Run blog_feed_to_blogger.py
         env:
           BLOG_ID: ${{ secrets.BLOG_ID }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPO: ${{ secrets.GITHUB_REPO }}
+          MY_GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
+          MY_GITHUB_REPO: ${{ secrets.MY_GITHUB_REPO }}
           IMG_PREFIX: ${{ secrets.IMG_PREFIX }}
           FEED_URL: ${{ secrets.FEED_URL }}
         run: python blog_feed_to_blogger.py
