@@ -13,8 +13,8 @@ import json
 # تنظیمات از محیط
 # -------------------
 BLOG_ID = os.environ.get("BLOG_ID")
-GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN")
-GITHUB_REPO = os.environ.get("GITHUB_REPO")
+GITHUB_TOKEN = os.environ.get("MY_GITHUB_TOKEN")
+GITHUB_REPO = os.environ.get("MY_GITHUB_REPO")
 IMG_PREFIX = os.environ.get("IMG_PREFIX")
 FEED_URL = os.environ.get("FEED_URL")
 POSTED_TITLES_FILE = "posted_titles.json"  # فایل ذخیره عنوان‌ها
