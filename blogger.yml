@@ -1,32 +1,35 @@
 name: Blogger Auto Post
 
+# زمان‌بندی اجرای اتوماتیک
 on:
+  workflow_dispatch:   # اجرای دستی
   schedule:
-    # هر روز ساعت 10:00 و 22:00 به وقت UTC اجرا میشه
-    - cron: "0 10,22 * * *"
-  workflow_dispatch: # برای اجرای دستی هم
-  
+    - cron: "0 10,22 * * *"   # هر روز ساعت 10 و 22 UTC
 
 jobs:
-  run-script:
+  blogger-post:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout Repository
         uses: actions/checkout@v3
 
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.10"
+          python-version: "3.11"
 
-      - name: Install dependencies
+      - name: Install Dependencies
         run: |
-          pip install feedparser googletrans==4.0.0-rc1 google-api-python-client google-auth google-auth-httplib2 google-auth-oauthlib
+          python -m pip install --upgrade pip
+          pip install feedparser beautifulsoup4 requests google-api-python-client google-auth google-auth-oauthlib deep-translator
 
-      - name: Run script
+      - name: Run Blogger Script
         env:
           BLOG_ID: ${{ secrets.BLOG_ID }}
-          SERVICE_ACCOUNT_FILE: service_account.json
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPO: ${{ secrets.GITHUB_REPO }}
+          IMG_PREFIX: ${{ secrets.IMG_PREFIX }}
+          FEED_URL: ${{ secrets.FEED_URL }}
         run: |
           python blog_feed_to_blogger.py
