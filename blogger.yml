@@ -1,0 +1,32 @@
+name: Blogger Auto Post
+
+on:
+  schedule:
+    # هر روز ساعت 10:00 و 22:00 به وقت UTC اجرا میشه
+    - cron: "0 10,22 * * *"
+  workflow_dispatch: # برای اجرای دستی هم
+  
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          pip install feedparser googletrans==4.0.0-rc1 google-api-python-client google-auth google-auth-httplib2 google-auth-oauthlib
+
+      - name: Run script
+        env:
+          BLOG_ID: ${{ secrets.BLOG_ID }}
+          SERVICE_ACCOUNT_FILE: service_account.json
+        run: |
+          python blog_feed_to_blogger.py
