@@ -127,6 +127,6 @@ for entry in feed.entries:
 
     print(f"✅ پست پیش‌نویس ایجاد شد: {post['url']}")
 
-    # ذخیره عنوان در فایل JSON و commit به ریپو
+    # ذخیره عنوان در فایل JSON
     posted_titles[title_de] = True
     save_posted_titles(posted_titles)
