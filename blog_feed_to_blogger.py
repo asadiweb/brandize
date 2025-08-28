@@ -2,7 +2,7 @@ import feedparser
 import requests
 from bs4 import BeautifulSoup
 from googleapiclient.discovery import build
-from google.oauth2.credentials import Credentials
+from google.oauth2.service_account import Credentials
 from deep_translator import GoogleTranslator
 import os
 import base64
@@ -17,17 +17,25 @@ GITHUB_TOKEN = os.environ.get("MY_GITHUB_TOKEN")
 GITHUB_REPO = os.environ.get("MY_GITHUB_REPO")
 IMG_PREFIX = os.environ.get("IMG_PREFIX")
 FEED_URL = os.environ.get("FEED_URL")
-POSTED_TITLES_FILE = "posted_titles.json"  # فایل ذخیره عنوان‌ها
+GOOGLE_CREDENTIALS = os.environ.get("GOOGLE_CREDENTIALS")  # سکرتس کلید سرویس
+POSTED_TITLES_FILE = "posted_titles.json"
 
 # -------------------
 # اتصال به Blogger API
 # -------------------
 def get_service():
-    creds = Credentials.from_authorized_user_file("token.json", ["https://www.googleapis.com/auth/blogger"])
+    if not GOOGLE_CREDENTIALS:
+        raise RuntimeError("❌ GOOGLE_CREDENTIALS env var not set")
+
+    creds_info = json.loads(GOOGLE_CREDENTIALS)
+    creds = Credentials.from_service_account_info(
+        creds_info,
+        scopes=["https://www.googleapis.com/auth/blogger"]
+    )
     return build("blogger", "v3", credentials=creds)
 
 service = get_service()
-translator = GoogleTranslator(source='de', target='fa')
+translator = GoogleTranslator(source="de", target="fa")
 
 # -------------------
 # پاک کردن لینک‌ها
@@ -50,7 +58,7 @@ def upload_image(img_url, title, idx):
     except:
         return img_url
 
-    ext = img_url.split('.')[-1].split("?")[0]
+    ext = img_url.split(".")[-1].split("?")[0]
     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
     filename = f"{title[:20].replace(' ','_')}_{idx}_{timestamp}.{ext}"
     path_in_repo = f"images/{filename}"
@@ -67,7 +75,7 @@ def upload_image(img_url, title, idx):
         print(f"✅ عکس آپلود شد: {filename}")
         return f"{IMG_PREFIX}/{filename}"
     else:
-        print(f"⚠️ آپلود عکس {filename} موفق نبود")
+        print(f"⚠️ آپلود عکس {filename} موفق نبود: {r.text}")
         return img_url
 
 # -------------------
