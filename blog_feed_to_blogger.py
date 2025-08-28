@@ -3,59 +3,54 @@ import json
 import feedparser
 import requests
 from bs4 import BeautifulSoup
-from deep_translator import GoogleTranslator
 from googleapiclient.discovery import build
 from google.oauth2 import service_account
+from deep_translator import GoogleTranslator
+import base64
+import datetime
 
-# -------------------------
-# تنظیمات محیط
-# -------------------------
+# --- تنظیمات محیطی ---
 BLOG_ID = os.getenv("BLOG_ID")
 FEED_URL = os.getenv("FEED_URL")
 IMG_PREFIX = os.getenv("IMG_PREFIX", "")
 POSTED_FILE = os.getenv("POSTED_FILE", "posted_titles.json")
-GOOGLE_CREDENTIALS = os.getenv("GOOGLE_CREDENTIALS")  # متن JSON
-SERVICE_ACCOUNT_FILE = os.getenv("SERVICE_ACCOUNT_FILE")  # مسیر فایل
+GITHUB_TOKEN = os.getenv("MY_GITHUB_TOKEN")
+GITHUB_REPO = os.getenv("MY_GITHUB_REPO")
+GOOGLE_CREDENTIALS = os.getenv("GOOGLE_CREDENTIALS")  # کلید سرویس از GitHub Secrets
+MAX_POSTS = int(os.getenv("MAX_POSTS", 5))  # تعداد پست‌های قابل پردازش
 
-print("🚀 شروع اجرای اسکریپت بلاگر")
+# --- مدیریت فایل عناوین منتشر شده ---
+def load_posted_titles():
+    if not os.path.exists(POSTED_FILE):
+        return {}
+    try:
+        with open(POSTED_FILE, "r", encoding="utf-8") as f:
+            content = f.read().strip()
+            if not content:
+                return {}
+            return json.loads(content)
+    except Exception as e:
+        print(f"⚠️ خطا در خواندن {POSTED_FILE}: {e}")
+        return {}
 
-# -------------------------
-# احراز هویت گوگل
-# -------------------------
+def save_posted_titles(data):
+    try:
+        with open(POSTED_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"⚠️ خطا در ذخیره {POSTED_FILE}: {e}")
+
+# --- آماده‌سازی Blogger API ---
 def get_blogger_service():
-    if SERVICE_ACCOUNT_FILE and os.path.exists(SERVICE_ACCOUNT_FILE):
-        print(f"✅ استفاده از فایل سرویس: {SERVICE_ACCOUNT_FILE}")
-        creds = service_account.Credentials.from_service_account_file(
-            SERVICE_ACCOUNT_FILE,
-            scopes=["https://www.googleapis.com/auth/blogger"]
-        )
-    elif GOOGLE_CREDENTIALS:
-        print("✅ استفاده از متن JSON سرویس (GOOGLE_CREDENTIALS)")
-        info = json.loads(GOOGLE_CREDENTIALS)
-        creds = service_account.Credentials.from_service_account_info(
-            info,
-            scopes=["https://www.googleapis.com/auth/blogger"]
-        )
-    else:
-        raise RuntimeError("❌ هیچ کلید سرویس گوگل پیدا نشد (SERVICE_ACCOUNT_FILE یا GOOGLE_CREDENTIALS)")
+    if not GOOGLE_CREDENTIALS:
+        raise RuntimeError("❌ GOOGLE_CREDENTIALS در محیط تعریف نشده است")
+    info = json.loads(GOOGLE_CREDENTIALS)
+    creds = service_account.Credentials.from_service_account_info(
+        info, scopes=["https://www.googleapis.com/auth/blogger"]
+    )
     return build("blogger", "v3", credentials=creds)
 
-# -------------------------
-# مدیریت لیست پست‌های منتشرشده
-# -------------------------
-def load_posted_titles():
-    if os.path.exists(POSTED_FILE):
-        with open(POSTED_FILE, "r", encoding="utf-8") as f:
-            return set(json.load(f))
-    return set()
-
-def save_posted_titles(titles):
-    with open(POSTED_FILE, "w", encoding="utf-8") as f:
-        json.dump(list(titles), f, ensure_ascii=False, indent=2)
-
-# -------------------------
-# پردازش محتوا
-# -------------------------
+# --- ترجمه متن ---
 def translate_text(text, target="fa"):
     try:
         return GoogleTranslator(source="auto", target=target).translate(text)
@@ -63,69 +58,91 @@ def translate_text(text, target="fa"):
         print(f"⚠️ خطا در ترجمه: {e}")
         return text
 
-def fetch_image(img_url):
-    if not img_url:
-        return None
-    if IMG_PREFIX:
-        return f"{IMG_PREFIX}{img_url}"
-    return img_url
+# --- دانلود و آپلود تصویر روی GitHub ---
+def upload_image_to_github(img_url, title, idx):
+    try:
+        resp = requests.get(img_url, timeout=15)
+        if resp.status_code != 200:
+            print(f"⚠️ دانلود عکس {img_url} موفق نبود")
+            return img_url
+    except Exception as e:
+        print(f"⚠️ خطا در دانلود عکس {img_url}: {e}")
+        return img_url
 
-# -------------------------
-# ارسال پست به بلاگر
-# -------------------------
-def post_to_blogger(service, title, content):
+    ext = img_url.split('.')[-1].split("?")[0]
+    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+    filename = f"{title[:20].replace(' ','_')}_{idx}_{timestamp}.{ext}"
+    path_in_repo = f"images/{filename}"
+
+    api_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path_in_repo}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    data = {
+        "message": f"upload {filename}",
+        "content": base64.b64encode(resp.content).decode("utf-8")
+    }
+
+    r = requests.put(api_url, headers=headers, json=data)
+    if r.status_code in [200, 201]:
+        print(f"✅ عکس آپلود شد: {filename}")
+        return f"{IMG_PREFIX}/{filename}"
+    else:
+        print(f"⚠️ آپلود عکس {filename} موفق نبود: {r.text}")
+        return img_url
+
+# --- پردازش محتوا ---
+def process_content(entry):
+    soup = BeautifulSoup(entry.summary, "html.parser")
+    for idx, img in enumerate(soup.find_all("img")):
+        src = img.get("src")
+        if src:
+            new_src = upload_image_to_github(src, entry.title, idx)
+            img["src"] = new_src
+    return str(soup)
+
+# --- انتشار پست در بلاگر ---
+def post_to_blogger(service, title, content, draft=True):
     body = {
         "kind": "blogger#post",
         "blog": {"id": BLOG_ID},
         "title": title,
         "content": content,
     }
-    post = service.posts().insert(blogId=BLOG_ID, body=body, isDraft=False).execute()
-    print(f"✅ پست منتشر شد: {post['url']}")
-
-# -------------------------
-# اجرای اصلی
-# -------------------------
-def main():
     try:
-        posted_titles = load_posted_titles()
-        service = get_blogger_service()
-
-        feed = feedparser.parse(FEED_URL)
-        if not feed.entries:
-            print("⚠️ هیچ مطلبی در فید پیدا نشد")
-            return
-
-        for entry in feed.entries[:5]:  # فقط ۵ تا پست آخر
-            title = entry.title
-            if title in posted_titles:
-                print(f"⏩ قبلاً منتشر شده: {title}")
-                continue
-
-            # ترجمه عنوان و محتوا
-            translated_title = translate_text(title, "fa")
-
-            summary = entry.get("summary", "")
-            translated_summary = translate_text(summary, "fa")
-
-            # تصویر اول (در صورت وجود)
-            soup = BeautifulSoup(summary, "html.parser")
-            img_tag = soup.find("img")
-            img_url = fetch_image(img_tag["src"]) if img_tag else None
-            img_html = f'<p><img src="{img_url}" /></p>' if img_url else ""
-
-            content = f"<h2>{translated_title}</h2>\n{img_html}\n<p>{translated_summary}</p>"
-
-            # ارسال به بلاگر
-            post_to_blogger(service, translated_title, content)
-
-            # ذخیره عنوان منتشرشده
-            posted_titles.add(title)
-            save_posted_titles(posted_titles)
-
+        post = service.posts().insert(blogId=BLOG_ID, body=body, isDraft=draft).execute()
+        status = "پیش‌نویس" if draft else "منتشر شد"
+        print(f"✅ پست {status}: {post['url']}")
+        return post
     except Exception as e:
-        print(f"❌ خطای غیرمنتظره: {e}")
-        raise
+        print(f"❌ خطا در انتشار پست: {e}")
+        return None
+
+# --- اجرای اصلی ---
+def main():
+    print("🚀 شروع اجرای اسکریپت بلاگر")
+    posted_titles = load_posted_titles()
+    feed = feedparser.parse(FEED_URL)
+    if not feed.entries:
+        print("⚠️ هیچ مطلبی در فید پیدا نشد")
+        return
+
+    service = get_blogger_service()
+
+    for entry in feed.entries[:MAX_POSTS]:
+        translated_title = translate_text(entry.title, "fa")
+        if translated_title in posted_titles:
+            print(f"⏩ قبلاً منتشر شده: {translated_title}")
+            continue
+
+        content = process_content(entry)
+        post_to_blogger(service, translated_title, content, draft=True)  # ارسال به صورت پیش‌نویس
+        posted_titles[translated_title] = True
+        save_posted_titles(posted_titles)
+
+    print("🏁 پایان اجرای اسکریپت")
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        print(f"❌ خطای غیرمنتظره: {e}")
+        exit(1)
