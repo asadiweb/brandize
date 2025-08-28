@@ -9,10 +9,10 @@ from deep_translator import GoogleTranslator
 
 # --- تنظیمات محیطی ---
 BLOG_ID = os.getenv("BLOG_ID")
-SERVICE_ACCOUNT_FILE = os.getenv("SERVICE_ACCOUNT_FILE", "service_account.json")
 FEED_URL = os.getenv("FEED_URL")
 IMG_PREFIX = os.getenv("IMG_PREFIX", "")
 POSTED_FILE = os.getenv("POSTED_FILE", "posted_titles.json")
+GOOGLE_CREDENTIALS = os.getenv("GOOGLE_CREDENTIALS")  # کلید سرویس از GitHub Secrets
 
 # --- مدیریت فایل عناوین منتشر شده ---
 def load_posted_titles():
@@ -37,9 +37,11 @@ def save_posted_titles(data):
 
 # --- آماده‌سازی Blogger API ---
 def get_blogger_service():
-    creds = service_account.Credentials.from_service_account_file(
-        SERVICE_ACCOUNT_FILE,
-        scopes=["https://www.googleapis.com/auth/blogger"]
+    if not GOOGLE_CREDENTIALS:
+        raise RuntimeError("❌ GOOGLE_CREDENTIALS در محیط تعریف نشده است")
+    info = json.loads(GOOGLE_CREDENTIALS)
+    creds = service_account.Credentials.from_service_account_info(
+        info, scopes=["https://www.googleapis.com/auth/blogger"]
     )
     return build("blogger", "v3", credentials=creds)
 
@@ -56,7 +58,6 @@ def download_and_rehost_image(url):
     try:
         response = requests.get(url, timeout=15)
         if response.status_code == 200:
-            # اینجا می‌تونی آپلود به سرور خودت اضافه کنی
             return url  # فعلاً همان URL اصلی برمی‌گرده
     except Exception as e:
         print(f"⚠️ خطا در دریافت تصویر {url}: {e}")
@@ -66,7 +67,6 @@ def download_and_rehost_image(url):
 def process_content(entry):
     soup = BeautifulSoup(entry.summary, "html.parser")
 
-    # اصلاح لینک تصاویر
     for img in soup.find_all("img"):
         src = img.get("src")
         if src:
@@ -96,18 +96,16 @@ if __name__ == "__main__":
     try:
         print("🚀 شروع اجرای اسکریپت بلاگر")
 
-        # لود لیست پست‌های قبلی
         posted_titles = load_posted_titles()
-
-        # دریافت فید
         feed = feedparser.parse(FEED_URL)
+
         if not feed.entries:
             print("⚠️ هیچ مطلبی در فید پیدا نشد")
             exit(0)
 
         service = get_blogger_service()
 
-        for entry in feed.entries[:5]:  # فقط ۵ پست آخر
+        for entry in feed.entries[:5]:
             title = translate_text(entry.title, "fa")
             if title in posted_titles:
                 print(f"⏩ قبلاً منتشر شده: {title}")
