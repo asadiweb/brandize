@@ -8,6 +8,8 @@ import os
 import base64
 import datetime
 import json
+import sys
+import traceback
 
 # -------------------
 # تنظیمات از محیط
@@ -20,13 +22,14 @@ FEED_URL = os.environ.get("FEED_URL")
 GOOGLE_CREDENTIALS = os.environ.get("GOOGLE_CREDENTIALS")  # سکرتس کلید سرویس
 POSTED_TITLES_FILE = "posted_titles.json"
 
+if not BLOG_ID or not FEED_URL or not GOOGLE_CREDENTIALS:
+    print("❌ خطا: متغیرهای محیطی لازم تنظیم نشده‌اند (BLOG_ID, FEED_URL, GOOGLE_CREDENTIALS)")
+    sys.exit(1)
+
 # -------------------
 # اتصال به Blogger API
 # -------------------
 def get_service():
-    if not GOOGLE_CREDENTIALS:
-        raise RuntimeError("❌ GOOGLE_CREDENTIALS env var not set")
-
     creds_info = json.loads(GOOGLE_CREDENTIALS)
     creds = Credentials.from_service_account_info(
         creds_info,
@@ -34,7 +37,12 @@ def get_service():
     )
     return build("blogger", "v3", credentials=creds)
 
-service = get_service()
+try:
+    service = get_service()
+except Exception as e:
+    print("❌ خطا در ساخت سرویس بلاگر:", e)
+    sys.exit(1)
+
 translator = GoogleTranslator(source="de", target="fa")
 
 # -------------------
@@ -51,11 +59,12 @@ def clean_links(html_content):
 # -------------------
 def upload_image(img_url, title, idx):
     try:
-        resp = requests.get(img_url)
+        resp = requests.get(img_url, timeout=15)
         if resp.status_code != 200:
             print(f"⚠️ دانلود عکس {img_url} موفق نبود")
             return img_url
-    except:
+    except Exception as e:
+        print(f"⚠️ خطا در دانلود عکس: {e}")
         return img_url
 
     ext = img_url.split(".")[-1].split("?")[0]
@@ -94,47 +103,58 @@ def save_posted_titles(titles):
 # -------------------
 # پردازش فید
 # -------------------
-posted_titles = load_posted_titles()
-feed = feedparser.parse(FEED_URL)
+try:
+    posted_titles = load_posted_titles()
+    feed = feedparser.parse(FEED_URL)
 
-for entry in feed.entries:
-    title_de = entry.title
-    if title_de in posted_titles:
-        print(f"⚠️ پست '{title_de}' قبلاً ارسال شده. رد شد.")
-        continue
+    if not feed.entries:
+        print("⚠️ هیچ ورودی‌ای در فید پیدا نشد.")
+        sys.exit(0)
 
-    content_de = entry.summary if "summary" in entry else entry.description
+    for entry in feed.entries:
+        title_de = entry.title
+        if title_de in posted_titles:
+            print(f"⚠️ پست '{title_de}' قبلاً ارسال شده. رد شد.")
+            continue
 
-    # پاک کردن لینک‌ها
-    content_clean = clean_links(content_de)
+        content_de = entry.get("summary", entry.get("description", ""))
 
-    # آپلود تصاویر
-    soup = BeautifulSoup(content_clean, "html.parser")
-    imgs = soup.find_all("img")
-    for idx, img in enumerate(imgs):
-        new_url = upload_image(img["src"], title_de, idx)
-        img["src"] = new_url
-    final_content = str(soup)
+        # پاک کردن لینک‌ها
+        content_clean = clean_links(content_de)
 
-    # ترجمه عنوان و متن
-    title_fa = translator.translate(title_de)
-    content_fa = translator.translate(final_content)
+        # آپلود تصاویر
+        soup = BeautifulSoup(content_clean, "html.parser")
+        imgs = soup.find_all("img")
+        for idx, img in enumerate(imgs):
+            if "src" in img.attrs:
+                new_url = upload_image(img["src"], title_de, idx)
+                img["src"] = new_url
+        final_content = str(soup)
 
-    # ارسال پیش‌نویس به بلاگر
-    post_body = {
-        "kind": "blogger#post",
-        "title": title_fa,
-        "content": content_fa
-    }
+        # ترجمه عنوان و متن
+        title_fa = translator.translate(title_de)
+        content_fa = translator.translate(final_content)
 
-    post = service.posts().insert(
-        blogId=BLOG_ID,
-        body=post_body,
-        isDraft=True
-    ).execute()
+        # ارسال پیش‌نویس به بلاگر
+        post_body = {
+            "kind": "blogger#post",
+            "title": title_fa,
+            "content": content_fa
+        }
 
-    print(f"✅ پست پیش‌نویس ایجاد شد: {post['url']}")
+        post = service.posts().insert(
+            blogId=BLOG_ID,
+            body=post_body,
+            isDraft=True
+        ).execute()
 
-    # ذخیره عنوان در فایل JSON
-    posted_titles[title_de] = True
-    save_posted_titles(posted_titles)
+        print(f"✅ پست پیش‌نویس ایجاد شد: {post['url']}")
+
+        # ذخیره عنوان در فایل JSON
+        posted_titles[title_de] = True
+        save_posted_titles(posted_titles)
+
+except Exception as e:
+    print("❌ خطای غیرمنتظره:", e)
+    traceback.print_exc()
+    sys.exit(1)
