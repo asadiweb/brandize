@@ -11,12 +11,10 @@ jobs:
 
     env:
       BLOG_ID: ${{ secrets.BLOG_ID }}
-      GITHUB_TOKEN_CUSTOM: ${{ secrets.MY_GITHUB_TOKEN }}
-      GITHUB_REPO_CUSTOM: ${{ secrets.MY_GITHUB_REPO }}
       IMG_PREFIX: ${{ secrets.IMG_PREFIX }}
       FEED_URL: ${{ secrets.FEED_URL }}
       POSTED_FILE: posted_titles.json
-      SERVICE_ACCOUNT_FILE: service_account.json   # فایل رو اینجا معرفی می‌کنیم
+      SERVICE_ACCOUNT_FILE: service_account.json
 
     steps:
       - name: Checkout repository
