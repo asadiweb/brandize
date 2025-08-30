@@ -1,0 +1,46 @@
+name: Test Gmail Send
+
+on:
+  workflow_dispatch:   # دستی اجرا میشه
+
+jobs:
+  send-email:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install smtplib email-validator || true
+
+      - name: Run email test
+        env:
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+        run: |
+          python - <<EOF
+          import smtplib
+          from email.mime.text import MIMEText
+          import os
+
+          EMAIL_USER = os.environ["EMAIL_USER"]
+          EMAIL_PASS = os.environ["EMAIL_PASS"]
+
+          msg = MIMEText("✅ تست ارسال ایمیل از GitHub Action موفق بود!")
+          msg["Subject"] = "Email Test from GitHub"
+          msg["From"] = EMAIL_USER
+          msg["To"] = EMAIL_USER
+
+          try:
+              with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+                  server.login(EMAIL_USER, EMAIL_PASS)
+                  server.sendmail(EMAIL_USER, EMAIL_USER, msg.as_string())
+              print("📩 ایمیل با موفقیت ارسال شد!")
+          except Exception as e:
+              print("❌ خطا در ارسال ایمیل:", e)
+          EOF
