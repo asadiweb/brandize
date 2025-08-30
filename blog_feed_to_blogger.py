@@ -1,23 +1,18 @@
 import os
 import json
 import feedparser
-import requests
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from bs4 import BeautifulSoup
 from deep_translator import GoogleTranslator
-import smtplib
-from email.message import EmailMessage
-import base64
-import datetime
 
 # --- تنظیمات محیطی ---
 FEED_URL = os.getenv("FEED_URL")
 POSTED_FILE = os.getenv("POSTED_FILE", "posted_titles.json")
-GITHUB_TOKEN = os.getenv("MY_GITHUB_TOKEN")
-GITHUB_REPO = os.getenv("MY_GITHUB_REPO")
-IMG_PREFIX = os.getenv("IMG_PREFIX", "")
 EMAIL_USER = os.getenv("EMAIL_USER")
 EMAIL_PASS = os.getenv("EMAIL_PASS")
-BLOGGER_EMAIL = os.getenv("BLOGGER_EMAIL")  # مثلا 
+BLOGGER_EMAIL = os.getenv("BLOGGER_EMAIL")
 
 # --- مدیریت فایل عناوین منتشر شده ---
 def load_posted_titles():
@@ -48,65 +43,34 @@ def translate_text(text, target="fa"):
         print(f"⚠️ خطا در ترجمه: {e}")
         return text
 
-# --- دانلود و آپلود تصویر به GitHub ---
-def download_and_rehost_image(url, title, idx):
-    try:
-        resp = requests.get(url, timeout=15)
-        if resp.status_code != 200:
-            return url
-        ext = url.split(".")[-1].split("?")[0]
-        timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-        filename = f"{title[:20].replace(' ','_')}_{idx}_{timestamp}.{ext}"
-        path_in_repo = f"images/{filename}"
-
-        api_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path_in_repo}"
-        headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-        data = {"message": f"upload {filename}",
-                "content": base64.b64encode(resp.content).decode("utf-8")}
-
-        r = requests.put(api_url, headers=headers, json=data)
-        if r.status_code in [200, 201]:
-            print(f"✅ عکس آپلود شد: {filename}")
-            return f"{IMG_PREFIX}/{filename}" if IMG_PREFIX else f"{filename}"
-        else:
-            print(f"⚠️ آپلود عکس {filename} موفق نبود: {r.text}")
-            return url
-    except Exception as e:
-        print(f"⚠️ خطا در دریافت تصویر {url}: {e}")
-        return url
-
 # --- پردازش محتوا ---
 def process_content(entry):
     content_de = getattr(entry, "summary", getattr(entry, "description", ""))
     soup = BeautifulSoup(content_de, "html.parser")
 
-    # اصلاح لینک تصاویر
-    for idx, img in enumerate(soup.find_all("img")):
-        src = img.get("src")
-        if src:
-            img["src"] = download_and_rehost_image(src, entry.title, idx)
-
-    # پاک کردن تمام لینک‌ها
+    # پاک کردن لینک‌ها
     for a in soup.find_all("a"):
         a.unwrap()
 
     return str(soup)
 
-# --- ارسال ایمیل به بلاگر ---
-def send_email(title, content):
+# --- ارسال ایمیل ---
+def send_email(subject, content):
     try:
-        msg = EmailMessage()
-        msg["Subject"] = title
-        msg["From"] = EMAIL_USER
-        msg["To"] = BLOGGER_EMAIL
-        msg.set_content(content, subtype="html")
+        msg = MIMEMultipart()
+        msg['From'] = EMAIL_USER
+        msg['To'] = BLOGGER_EMAIL
+        msg['Subject'] = subject
+        msg.attach(MIMEText(content, 'html'))
 
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-            smtp.login(EMAIL_USER, EMAIL_PASS)
-            smtp.send_message(msg)
-        print(f"✅ ایمیل ارسال شد: {title}")
+        server = smtplib.SMTP('smtp.mail.yahoo.com', 587)
+        server.starttls()
+        server.login(EMAIL_USER, EMAIL_PASS)
+        server.send_message(msg)
+        server.quit()
+        print(f"✅ ایمیل پیش‌نویس ارسال شد: {subject}")
     except Exception as e:
-        print(f"❌ خطا در ارسال ایمیل '{title}': {e}")
+        print(f"❌ خطا در ارسال ایمیل '{subject}': {e}")
 
 # --- اجرای اصلی ---
 def main():
@@ -120,11 +84,13 @@ def main():
     for entry in feed.entries[:5]:  # فقط ۵ پست آخر
         translated_title = translate_text(entry.title, "fa")
         if translated_title in posted_titles:
-            print(f"⏩ قبلاً منتشر شده: {translated_title}")
+            print(f"⏩ قبلاً ارسال شده: {translated_title}")
             continue
 
         content = process_content(entry)
-        send_email(translated_title, content)
+        translated_content = translate_text(content, "fa")
+        send_email(translated_title, translated_content)
+
         posted_titles[translated_title] = True
         save_posted_titles(posted_titles)
 
