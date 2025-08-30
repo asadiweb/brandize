@@ -3,21 +3,21 @@ import json
 import feedparser
 import requests
 from bs4 import BeautifulSoup
-from googleapiclient.discovery import build
-from google.oauth2 import service_account
 from deep_translator import GoogleTranslator
-import datetime
+import smtplib
+from email.message import EmailMessage
 import base64
-import textwrap
+import datetime
 
 # --- تنظیمات محیطی ---
-BLOG_ID = os.getenv("BLOG_ID")
 FEED_URL = os.getenv("FEED_URL")
-IMG_PREFIX = os.getenv("IMG_PREFIX", "")
 POSTED_FILE = os.getenv("POSTED_FILE", "posted_titles.json")
-GOOGLE_CREDENTIALS = os.getenv("GOOGLE_CREDENTIALS")  # کلید سرویس از GitHub Secrets
 GITHUB_TOKEN = os.getenv("MY_GITHUB_TOKEN")
 GITHUB_REPO = os.getenv("MY_GITHUB_REPO")
+IMG_PREFIX = os.getenv("IMG_PREFIX", "")
+EMAIL_USER = os.getenv("EMAIL_USER")
+EMAIL_PASS = os.getenv("EMAIL_PASS")
+BLOGGER_EMAIL = os.getenv("BLOGGER_EMAIL")  # مثلا 
 
 # --- مدیریت فایل عناوین منتشر شده ---
 def load_posted_titles():
@@ -40,27 +40,15 @@ def save_posted_titles(data):
     except Exception as e:
         print(f"⚠️ خطا در ذخیره {POSTED_FILE}: {e}")
 
-# --- آماده‌سازی Blogger API ---
-def get_blogger_service():
-    if not GOOGLE_CREDENTIALS:
-        raise RuntimeError("❌ GOOGLE_CREDENTIALS در محیط تعریف نشده است")
-    info = json.loads(GOOGLE_CREDENTIALS)
-    creds = service_account.Credentials.from_service_account_info(
-        info, scopes=["https://www.googleapis.com/auth/blogger"]
-    )
-    return build("blogger", "v3", credentials=creds)
-
-# --- ترجمه متن با تقسیم‌بندی به تکه‌های ≤5000 کاراکتر ---
+# --- ترجمه متن ---
 def translate_text(text, target="fa"):
     try:
-        parts = textwrap.wrap(text, 4500)  # کمی کمتر از 5000 برای اطمینان
-        translated_parts = [GoogleTranslator(source="auto", target=target).translate(p) for p in parts]
-        return "\n".join(translated_parts)
+        return GoogleTranslator(source="auto", target=target).translate(text)
     except Exception as e:
         print(f"⚠️ خطا در ترجمه: {e}")
         return text
 
-# --- دانلود و آپلود تصویر (فعلاً همان URL برگشت داده می‌شود) ---
+# --- دانلود و آپلود تصویر به GitHub ---
 def download_and_rehost_image(url, title, idx):
     try:
         resp = requests.get(url, timeout=15)
@@ -89,8 +77,8 @@ def download_and_rehost_image(url, title, idx):
 
 # --- پردازش محتوا ---
 def process_content(entry):
-    content_html = getattr(entry, "summary", getattr(entry, "description", ""))
-    soup = BeautifulSoup(content_html, "html.parser")
+    content_de = getattr(entry, "summary", getattr(entry, "description", ""))
+    soup = BeautifulSoup(content_de, "html.parser")
 
     # اصلاح لینک تصاویر
     for idx, img in enumerate(soup.find_all("img")):
@@ -98,40 +86,36 @@ def process_content(entry):
         if src:
             img["src"] = download_and_rehost_image(src, entry.title, idx)
 
-    # پاک کردن لینک‌ها
+    # پاک کردن تمام لینک‌ها
     for a in soup.find_all("a"):
         a.unwrap()
 
     return str(soup)
 
-# --- انتشار پست در بلاگر ---
-def post_to_blogger(service, title, content):
-    if not content.strip():
-        print(f"⚠️ محتوای پست '{title}' خالی است. پست ایجاد نشد.")
-        return None
-    body = {
-        "kind": "blogger#post",
-        "title": title,
-        "content": content
-    }
+# --- ارسال ایمیل به بلاگر ---
+def send_email(title, content):
     try:
-        post = service.posts().insert(blogId=BLOG_ID, body=body, isDraft=True).execute()
-        print(f"✅ پست پیش‌نویس ایجاد شد: {post.get('url')}")
-        return post
+        msg = EmailMessage()
+        msg["Subject"] = title
+        msg["From"] = EMAIL_USER
+        msg["To"] = BLOGGER_EMAIL
+        msg.set_content(content, subtype="html")
+
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+            smtp.login(EMAIL_USER, EMAIL_PASS)
+            smtp.send_message(msg)
+        print(f"✅ ایمیل ارسال شد: {title}")
     except Exception as e:
-        print(f"❌ خطا در ارسال پست '{title}': {e}")
-        return None
+        print(f"❌ خطا در ارسال ایمیل '{title}': {e}")
 
 # --- اجرای اصلی ---
 def main():
-    print("🚀 شروع اجرای اسکریپت بلاگر")
+    print("🚀 شروع اجرای اسکریپت بلاگر از طریق ایمیل")
     posted_titles = load_posted_titles()
     feed = feedparser.parse(FEED_URL)
     if not feed.entries:
         print("⚠️ هیچ مطلبی در فید پیدا نشد")
         return
-
-    service = get_blogger_service()
 
     for entry in feed.entries[:5]:  # فقط ۵ پست آخر
         translated_title = translate_text(entry.title, "fa")
@@ -139,10 +123,8 @@ def main():
             print(f"⏩ قبلاً منتشر شده: {translated_title}")
             continue
 
-        content_html = process_content(entry)
-        translated_content = translate_text(content_html, "fa")
-        post_to_blogger(service, translated_title, translated_content)
-
+        content = process_content(entry)
+        send_email(translated_title, content)
         posted_titles[translated_title] = True
         save_posted_titles(posted_titles)
 
