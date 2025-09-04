@@ -2,11 +2,11 @@ name: Blog Feed to Zapier
 
 on:
   schedule:
-    - cron: "0 10,22 * * *"   # دوبار در روز UTC
+    - cron: "0 10,22 * * *"
   workflow_dispatch:
 
 permissions:
-  contents: write   # برای commit کردن posted_titles.json
+  contents: write
 
 jobs:
   run-blog-feed:
@@ -21,15 +21,29 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: true
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
           python-version: "3.11"
 
+      - name: Ensure posted_titles.json exists
+        run: |
+          if [ ! -f posted_titles.json ]; then
+            echo "{}" > posted_titles.json
+          fi
+
       - name: Install deps
         run: |
+          python -m pip install --upgrade pip
           pip install feedparser beautifulsoup4 requests deep-translator
+
+      - name: Debug info
+        run: |
+          echo "Max items: $MAX_ITEMS"
+          ls -la
 
       - name: Run script
         run: |
@@ -42,5 +56,5 @@ jobs:
             git config user.name "GitHub Actions"
             git add posted_titles.json
             git commit -m "Update posted_titles.json [skip ci]"
-            git push
+            git push origin HEAD:refs/heads/main
           fi
