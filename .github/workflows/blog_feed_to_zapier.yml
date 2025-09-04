@@ -1,0 +1,46 @@
+name: Blog Feed to Zapier
+
+on:
+  schedule:
+    - cron: "0 10,22 * * *"   # دوبار در روز UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write   # برای commit کردن posted_titles.json
+
+jobs:
+  run-blog-feed:
+    runs-on: ubuntu-latest
+    env:
+      FEED_URL: ${{ secrets.FEED_URL }}
+      ZAPIER_WEBHOOK_URL: ${{ secrets.ZAPIER_WEBHOOK_URL }}
+      POSTED_FILE: posted_titles.json
+      MAX_ITEMS: "5"
+      SLEEP_BETWEEN: "0.7"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          pip install feedparser beautifulsoup4 requests deep-translator
+
+      - name: Run script
+        run: |
+          python blog_feed_to_zapier.py
+
+      - name: Commit posted_titles.json (if changed)
+        run: |
+          if [[ -n "$(git status --porcelain posted_titles.json)" ]]; then
+            git config user.email "actions@github.com"
+            git config user.name "GitHub Actions"
+            git add posted_titles.json
+            git commit -m "Update posted_titles.json [skip ci]"
+            git push
+          fi
