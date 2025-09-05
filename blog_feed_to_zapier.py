@@ -69,13 +69,11 @@ def translate_title(title):
         return title
 
 # -------------------
-# ترجمه محتوا با شکستن به بلوک‌های کوتاه (برای عبور از محدودیت 5000 کاراکتر)
-# رویکرد: متن‌های داخل تگ‌ها (NavigableString) را جداگانه ترجمه می‌کنیم
+# ترجمه محتوا با شکستن به بلوک‌های کوتاه
 # -------------------
 def translate_html_blocks(html):
     soup = BeautifulSoup(html or "", "html.parser")
 
-    # تگ‌هایی که نباید ترجمه شوند
     skip_tags = {"code", "pre", "script", "style"}
     text_nodes = []
 
@@ -84,13 +82,11 @@ def translate_html_blocks(html):
         txt = str(elem)
         if parent in skip_tags:
             continue
-        # بی‌معناها رو رد کن
         if not txt.strip():
             continue
         text_nodes.append((elem, txt))
 
     for node, txt in text_nodes:
-        # بلوک‌های بزرگ رو به پاراگراف/جمله بشکنیم
         parts = split_text_safely(txt, max_len=4000)
         out = []
         for p in parts:
@@ -102,9 +98,6 @@ def translate_html_blocks(html):
     return str(soup)
 
 def split_text_safely(text, max_len=4000):
-    """
-    تلاش می‌کند متن را از روی خطوط/جملات به قطعات <= max_len بشکند.
-    """
     if len(text) <= max_len:
         return [text]
 
@@ -112,7 +105,6 @@ def split_text_safely(text, max_len=4000):
     buf = []
     buf_len = 0
 
-    # اول با \n بشکنیم
     paragraphs = text.split("\n")
     for para in paragraphs:
         if not para:
@@ -125,7 +117,6 @@ def split_text_safely(text, max_len=4000):
             buf = [unit]
             buf_len = len(unit)
         elif len(unit) > max_len:
-            # خیلی بزرگه؛ به جمله بشکن
             sentences = split_sentences(unit, limit=max_len)
             for s in sentences:
                 if buf_len + len(s) > max_len and buf:
@@ -144,7 +135,6 @@ def split_text_safely(text, max_len=4000):
     return chunks
 
 def split_sentences(text, limit=4000):
-    # شکستن ساده بر اساس نقطه/علامت تعجب/سؤال
     import re
     sents = re.split(r'([\.!\?]+[\s]*)', text)
     merged = []
@@ -173,15 +163,21 @@ def safe_translate(text):
         return text
 
 # -------------------
-# ارسال به Zapier Webhook (که اونجا ایمیل به Blogger ارسال می‌شود)
+# ارسال به Zapier Webhook
 # -------------------
 def send_to_zapier(title_fa, html_fa, source_url=None, published=None):
     payload = {
         "title": title_fa,
-        "html": html_fa,            # بدنه HTML کامل
+        "html": html_fa,
         "source_url": source_url or "",
         "published": str(published or ""),
     }
+
+    # 🔍 لاگ برای دیدن دقیق payload
+    print("====== PAYLOAD TO ZAPIER ======")
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    print("================================")
+
     try:
         r = requests.post(ZAPIER_WEBHOOK_URL, json=payload, timeout=30)
         if 200 <= r.status_code < 300:
@@ -216,14 +212,11 @@ def main():
         raw_html = getattr(entry, "summary", "") or getattr(entry, "description", "")
         raw_html = raw_html or ""
 
-        # 1) حذف لینک‌ها
         html_no_links = clean_links(raw_html)
 
-        # 2) ترجمه عنوان و محتوا (با بلوک‌بندی ایمن)
         title_fa = translate_title(raw_title)
         html_fa = translate_html_blocks(html_no_links)
 
-        # 3) ارسال به Zapier (Zap آن را ایمیل HTML به آدرس @blogger.com می‌فرستد)
         ok = send_to_zapier(
             title_fa=title_fa,
             html_fa=html_fa,
@@ -239,7 +232,7 @@ def main():
             }
             save_posted(posted)
             count += 1
-            time.sleep(0.5)  # کمی تنفس بین ایمیل‌ها
+            time.sleep(0.5)
 
     print(f"🏁 پایان. ارسال‌های جدید: {count}")
 
