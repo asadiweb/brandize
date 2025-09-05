@@ -42,7 +42,7 @@ def save_posted(d):
     except Exception as e:
         print(f"⚠️ خطا در ذخیره {POSTED_FILE}: {e}")
 
-# کلید یکتا برای هر آیتم (ترجیحاً لینک یا id)
+# کلید یکتا برای هر آیتم
 def entry_key(entry):
     base = getattr(entry, "id", "") or getattr(entry, "link", "") or getattr(entry, "title", "")
     if not base:
@@ -50,12 +50,12 @@ def entry_key(entry):
     return hashlib.sha1(base.encode("utf-8")).hexdigest()
 
 # -------------------
-# پاکسازی HTML: حذف لینک‌ها و نگه‌داشتن متن و تصاویر
+# پاکسازی HTML
 # -------------------
 def clean_links(html):
     soup = BeautifulSoup(html or "", "html.parser")
     for a in soup.find_all("a"):
-        a.unwrap()  # فقط متنِ داخل لینک می‌ماند
+        a.unwrap()
     return str(soup)
 
 # -------------------
@@ -69,11 +69,10 @@ def translate_title(title):
         return title
 
 # -------------------
-# ترجمه محتوا با شکستن به بلوک‌های کوتاه
+# ترجمه محتوا
 # -------------------
 def translate_html_blocks(html):
     soup = BeautifulSoup(html or "", "html.parser")
-
     skip_tags = {"code", "pre", "script", "style"}
     text_nodes = []
 
@@ -100,18 +99,12 @@ def translate_html_blocks(html):
 def split_text_safely(text, max_len=4000):
     if len(text) <= max_len:
         return [text]
-
     chunks = []
     buf = []
     buf_len = 0
-
     paragraphs = text.split("\n")
     for para in paragraphs:
-        if not para:
-            unit = "\n"
-        else:
-            unit = para + "\n"
-
+        unit = para + "\n" if para else "\n"
         if buf_len + len(unit) > max_len and buf:
             chunks.append("".join(buf))
             buf = [unit]
@@ -129,7 +122,6 @@ def split_text_safely(text, max_len=4000):
         else:
             buf.append(unit)
             buf_len += len(unit)
-
     if buf:
         chunks.append("".join(buf))
     return chunks
@@ -142,7 +134,6 @@ def split_sentences(text, limit=4000):
         core = sents[i]
         tail = sents[i+1] if i+1 < len(sents) else ""
         merged.append(core + tail)
-
     chunks = []
     cur = ""
     for s in merged:
@@ -172,12 +163,6 @@ def send_to_zapier(title_fa, html_fa, source_url=None, published=None):
         "source_url": source_url or "",
         "published": str(published or ""),
     }
-
-    # 🔍 لاگ برای دیدن دقیق payload
-    print("====== PAYLOAD TO ZAPIER ======")
-    print(json.dumps(payload, ensure_ascii=False, indent=2))
-    print("================================")
-
     try:
         r = requests.post(ZAPIER_WEBHOOK_URL, json=payload, timeout=30)
         if 200 <= r.status_code < 300:
@@ -195,7 +180,6 @@ def send_to_zapier(title_fa, html_fa, source_url=None, published=None):
 def main():
     print("🚀 شروع پردازش فید و ارسال به Zapier")
     posted = load_posted()
-
     feed = feedparser.parse(FEED_URL)
     if not feed.entries:
         print("⚠️ هیچ مطلبی در فید نیست.")
@@ -209,11 +193,17 @@ def main():
             continue
 
         raw_title = getattr(entry, "title", "").strip()
-        raw_html = getattr(entry, "summary", "") or getattr(entry, "description", "")
-        raw_html = raw_html or ""
+
+        # فقط content:encoded
+        raw_html = ""
+        if hasattr(entry, "content") and entry.content:
+            raw_html = entry.content[0].value
+
+        if not raw_html:
+            print(f"⚠️ هیچ content برای این پست نیست: {raw_title}")
+            continue
 
         html_no_links = clean_links(raw_html)
-
         title_fa = translate_title(raw_title)
         html_fa = translate_html_blocks(html_no_links)
 
