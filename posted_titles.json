@@ -148,5 +148,35 @@
     "title_fa": "Google به روزرسانی ویژه را شروع می کند: Android-16 Detache بدون از دست دادن داده می تواند از بین برود",
     "link": "https://www.schmidtisblog.de/google-startet-spezielles-update-android-16-betatester-koennen-ohne-datenverlust-aussteigen-1783819/",
     "sent_at": 1757767103
+  },
+  "115fda168d744e30f0c894441cf380302ceca72e": {
+    "title_de": "Kritische Sicherheitslücke bei Samsung: Patch stoppt aktive Zero-Day-Angriffe",
+    "title_fa": "شکاف امنیتی بحرانی در سامسونگ: پچ حملات فعال روز صفر را متوقف می کند",
+    "link": "https://www.schmidtisblog.de/kritische-sicherheitsluecke-bei-samsung-patch-stoppt-aktive-zero-day-angriffe-1783849/",
+    "sent_at": 1757787898
+  },
+  "c84eb189dbae5cd14815238223b11487f791b6ee": {
+    "title_de": "Samsung Galaxy S26 Ultra: Schnelleres Laden kommt nicht!",
+    "title_fa": "سامسونگ Galaxy S26 Ultra: سریعتر فروشگاه نمی آید!",
+    "link": "https://www.schmidtisblog.de/samsung-galaxy-s26-ultra-schnelleres-laden-kommt-nicht-1783846/",
+    "sent_at": 1757787921
+  },
+  "70844a5a293935a10022b824321e145d7b12bc82": {
+    "title_de": "Android-Sicherheit: Warum Google jetzt auf Risiko-basiertes Patchen setzt",
+    "title_fa": "Android Security: چرا Google اکنون به تکه های مبتنی بر ریسک متکی است",
+    "link": "https://www.schmidtisblog.de/android-sicherheit-warum-google-jetzt-auf-risiko-basiertes-patchen-setzt-1783844/",
+    "sent_at": 1757787946
+  },
+  "c7e4e6be638b5272bf48f82b89e3db7b87eb322f": {
+    "title_de": "Circle to Search – das wichtigste Android-Features?",
+    "title_fa": "حلقه برای جستجو-مهمترین ویژگی های اندرویدی؟",
+    "link": "https://www.schmidtisblog.de/circle-to-search-das-wichtigste-android-features-1783841/",
+    "sent_at": 1757787969
+  },
+  "16bdd4dd34ae886b6b8019c0c0c5f9c8c6be966d": {
+    "title_de": "Pixel 10 Pro: Kamera-Coach bringt smarte Foto-Tipps in Echtzeit",
+    "title_fa": "Pixel 10 Pro: مربی دوربین نکات عکس هوشمند را در زمان واقعی به ارمغان می آورد",
+    "link": "https://www.schmidtisblog.de/pixel-10-pro-kamera-coach-bringt-smarte-foto-tipps-in-echtzeit-1783839/",
+    "sent_at": 1757787987
   }
 }
